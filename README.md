@@ -26,8 +26,7 @@ K♦  7♦  2♠  X♦  A♠  8♠  4♥
 For example, to move the Ace of Spades to the first foundation, you should type
 "as f1" to move it.
 
-You can type "deal" followed by a space and any letter to deal a card.
-You can type "undo" followed by a space and any letter to undo.
+You can type "deal" to deal a card.
+You can type "undo" to undo.
 
-A better command line interface, and then a graphical interfaced are in the
-works.
+Graphical interface is planned for the future.

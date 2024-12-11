@@ -28,6 +28,9 @@ pile_empty(struct pile *pile);
 bool
 pile_top_is_face_up(struct pile *pile);
 
+struct card *
+pile_last_face_up_card(struct pile *pile);
+
 int
 pile_count(struct pile *pile);
 
@@ -90,7 +93,7 @@ bool
 game_over(struct field *field);
 
 bool
-user_move(struct field *field);
+user_input(struct field *field);
 
 
 #endif // SOLITAIRE_GAME_H_

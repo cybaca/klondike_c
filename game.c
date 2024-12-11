@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <unistd.h>
+#include <termios.h>
 
 #define SOLITAIRE_DECK_SIZE (RANK_MAX * SUIT_MAX)
 
@@ -129,6 +131,44 @@ _history_push(
     );
 
 // INTERNAL IMPLEMENTATION
+
+
+static inline void
+_str_to_lower(char *str)
+{
+    char *c = str;
+    for (c = str; *c != '\0'; ++c)
+        *c = tolower(*c);
+}
+
+static inline bool
+_char_is_number(char c) { return !(c < '0' || c > '9'); }
+
+static inline int
+_char_to_int(char c)
+{
+    if (!_char_is_number(c))
+        return -1;
+    return c - '0';
+}
+
+static inline char
+_str_last_char(char *str)
+{
+    char *c = str;
+    while (*c != '\0')
+        c++;
+    return *(c - 1);
+}
+
+static inline int
+_str_get_digit(char *str)
+{
+    char c = _str_last_char(str);
+    return _char_to_int(c);
+}
+
+
 
 static inline void
 _pile_set_card_locations(struct pile *pile)
@@ -511,6 +551,18 @@ pile_top_is_face_up(struct pile *pile)
     if (card == NULL)
         return false;
     return card->face_up;
+}
+
+struct card *
+pile_last_face_up_card(struct pile *pile)
+{
+    struct card *card;
+    if (pile_empty(pile))
+        return NULL;
+    list_for_each_entry_reverse(card, &pile->list, list)
+        if (card->face_up)
+            return card;
+    return NULL;
 }
 
 int
@@ -978,180 +1030,6 @@ field_destroy(struct field *field)
     _field_history_destroy(field);
 }
 
-static inline void
-_str_to_lower(char *str)
-{
-    char *c = str;
-    for (c = str; *c != '\0'; ++c)
-        *c = tolower(*c);
-}
-
-static inline bool
-_char_is_number(char c) { return !(c < '0' || c > '9'); }
-
-static inline int
-_char_to_int(char c)
-{
-    if (!_char_is_number(c))
-        return -1;
-    return c - '0';
-}
-
-static inline char
-_str_last_char(char *str)
-{
-    char *c = str;
-    while (*c != '\0')
-        c++;
-    return *(c - 1);
-}
-
-static inline int
-_str_get_digit(char *str)
-{
-    char c = _str_last_char(str);
-    return _char_to_int(c);
-}
-
-// TODO: Write parser for easy commandline input
-// TODO: Implement auto move / auto completion
-bool
-user_move(struct field *field)
-{
-    char const *rankstr[] = {
-        "a", "2", "3", "4", "5", "6",
-        "7", "8", "9", "x", "j", "q", "k"
-    };
-
-    char const *suitstr[] = {
-        "s", "d", "c", "h"
-    };
-
-    char move_src[256] = { 0 };
-    char move_dst[256] = { 0 };
-
-    printf("Enter next move: \n");
-    scanf("%s %s", move_src, move_dst);
-    _str_to_lower(move_src);
-    _str_to_lower(move_dst);
-
-    printf("Input: %s %s\n", move_src, move_dst);
-
-    if (move_src[0] == 'd') {
-        deal_card(field);
-        printf("Deal card!\n");
-        return true;
-    }
-
-    if (move_src[0] == 'u') {
-        undo_move(field);
-        printf("Undo!\n");
-        return true;
-    }
-
-
-    enum card_rank rank = RANK_MAX;
-    enum card_suit suit = SUIT_MAX;
-    struct card *src_card = NULL;
-    struct pile *dst_pile = NULL;
-
-    int i;
-    char n = _str_last_char(move_src);
-    for (i = 0; i < RANK_MAX; ++i)
-        if (move_src[0] == rankstr[i][0])
-            rank = i;
-    for (i = 0; i < SUIT_MAX; ++i)
-        if (n == suitstr[i][0])
-            suit = i;
-
-    if (rank == RANK_MAX) {
-        fprintf(stderr, "Not a valid number input: %s %d\n", move_src, rank);
-        return false;
-    }
-    if (suit == SUIT_MAX) {
-        fprintf(stderr, "Not a valid suit input %s %d\n", move_src, suit);
-        return false;
-    }
-
-    src_card = field_search(field, suit, rank);
-    if (src_card == NULL) {
-        fprintf(stderr, "ERROR: Could not find card!!!\n");
-        return false;
-    }
-
-    // TODO: Need to add logic so that card can not be moved from any position
-    // in waste pile.
-    if (src_card->face_up == false) {
-        printf("That card is not available! Choose another card\n");
-        return false;
-    }
-
-
-    n = _str_last_char(move_dst);
-    if (move_dst[0] == 't') {
-        switch (n) {
-            case '1':
-                dst_pile = &field->tableaus[0];
-                break;
-            case '2':
-                dst_pile = &field->tableaus[1];
-                break;
-            case '3':
-                dst_pile = &field->tableaus[2];
-                break;
-            case '4':
-                dst_pile = &field->tableaus[3];
-                break;
-            case '5':
-                dst_pile = &field->tableaus[4];
-                break;
-            case '6':
-                dst_pile = &field->tableaus[5];
-                break;
-            case '7':
-                dst_pile = &field->tableaus[6];
-                break;
-            default:
-                fprintf(stderr, "Destination input invalid!\n");
-                return false;
-        }
-    }
-
-    if (move_dst[0] == 'f') {
-        switch (n) {
-            case '1':
-                dst_pile = &field->foundations[0];
-                break;
-            case '2':
-                dst_pile = &field->foundations[1];
-                break;
-            case '3':
-                dst_pile = &field->foundations[2];
-                break;
-            case '4':
-                dst_pile = &field->foundations[3];
-                break;
-            default:
-                fprintf(stderr, "Destination input invalid!\n");
-                return false;
-        }
-    }
-
-    if (dst_pile == NULL) {
-        fprintf(stderr, "Invalid destionation  input: %s\n", move_dst);
-        return false;
-    }
-
-    printf("Moved from %s to %s\n", move_src, move_dst);
-
-    struct pile *flip_pile = src_card->pile;
-    bool ret = move_card_to_pile(src_card, dst_pile);
-    if (ret)
-        _history_push(field, src_card, flip_pile, dst_pile);
-    pile_top_flip_up(flip_pile);
-    return ret;
-}
-
 bool
 game_completion_check(struct field *field)
 {
@@ -1165,18 +1043,6 @@ game_completion_check(struct field *field)
     }
 
     return true;
-}
-
-struct card *
-pile_last_face_up_card(struct pile *pile)
-{
-    struct card *card;
-    if (pile_empty(pile))
-        return NULL;
-    list_for_each_entry_reverse(card, &pile->list, list)
-        if (card->face_up)
-            return card;
-    return NULL;
 }
 
 bool
@@ -1281,3 +1147,172 @@ game_over(struct field *field)
 }
 
 // TODO: Add help message for -h flag
+// TODO: Write parser for easy commandline input
+// TODO: Implement auto move / auto completion
+bool
+user_input(struct field *field)
+{
+    char const *rankstr[] = {
+        "a", "2", "3", "4", "5", "6",
+        "7", "8", "9", "x", "j", "q", "k"
+    };
+
+    char const *suitstr[] = {
+        "s", "d", "c", "h"
+    };
+
+    char buffer[256] = { 0 };
+    char move_src[256] = { 0 };
+    char move_dst[256] = { 0 };
+    int pos = 0;
+    char c;
+
+    printf("Enter next move: \n");
+    while (read(STDIN_FILENO, &c, 1) == 1) {
+
+        if (c == '\n') {
+            break;
+        } else if (c == '\b' || c == 0x7f) {
+            if (pos > 0) {
+                pos--;
+                write(STDOUT_FILENO, "\b \b", 3);
+            }
+        } else if (pos < 255) {
+            buffer[pos++] = c;
+            write(STDOUT_FILENO, &c, 1);
+        }
+    }
+
+    buffer[pos] = '\0';
+
+    _str_to_lower(buffer);
+
+    if (strcmp(buffer, "deal") == 0) {
+        deal_card(field);
+        printf("Deal card!\n");
+        return true;
+    }
+
+    if (strcmp(buffer, "undo") == 0) {
+        undo_move(field);
+        printf("Undo!\n");
+        return true;
+    }
+
+    char *p = buffer;
+    while (*p != ' ')
+        p++;
+    p++;
+    strcpy(move_src, buffer);
+    strcpy(move_dst, p);
+    p = move_src;
+    while (*p != ' ')
+        p++;
+    *p = '\0';
+
+    enum card_rank rank = RANK_MAX;
+    enum card_suit suit = SUIT_MAX;
+    struct card *src_card = NULL;
+    struct pile *dst_pile = NULL;
+
+    int i;
+    char n = _str_last_char(move_src);
+
+    for (i = 0; i < RANK_MAX; ++i)
+        if (move_src[0] == rankstr[i][0])
+            rank = i;
+    for (i = 0; i < SUIT_MAX; ++i)
+        if (n == suitstr[i][0])
+            suit = i;
+
+    if (rank == RANK_MAX) {
+        fprintf(stderr, "Not a valid number input: %s %d\n", move_src, rank);
+        return false;
+    }
+    if (suit == SUIT_MAX) {
+        fprintf(stderr, "Not a valid suit input %s %d\n", move_src, suit);
+        return false;
+    }
+
+    src_card = field_search(field, suit, rank);
+    if (src_card == NULL) {
+        fprintf(stderr, "ERROR: Could not find card!!!\n");
+        return false;
+    }
+
+    // TODO: Need to add logic so that card can not be moved from any position
+    // in waste pile.
+    if (src_card->face_up == false) {
+        printf("That card is not available! Choose another card\n");
+        return false;
+    }
+
+    n = _str_last_char(move_dst);
+    if (move_dst[0] == 't') {
+        switch (n) {
+            case '1':
+                dst_pile = &field->tableaus[0];
+                break;
+            case '2':
+                dst_pile = &field->tableaus[1];
+                break;
+            case '3':
+                dst_pile = &field->tableaus[2];
+                break;
+            case '4':
+                dst_pile = &field->tableaus[3];
+                break;
+            case '5':
+                dst_pile = &field->tableaus[4];
+                break;
+            case '6':
+                dst_pile = &field->tableaus[5];
+                break;
+            case '7':
+                dst_pile = &field->tableaus[6];
+                break;
+            default:
+                fprintf(stderr, "Destination input invalid!\n");
+                return false;
+        }
+    }
+
+    if (move_dst[0] == 'f') {
+        switch (n) {
+            case '1':
+                dst_pile = &field->foundations[0];
+                break;
+            case '2':
+                dst_pile = &field->foundations[1];
+                break;
+            case '3':
+                dst_pile = &field->foundations[2];
+                break;
+            case '4':
+                dst_pile = &field->foundations[3];
+                break;
+            default:
+                fprintf(stderr,
+                    "Destination input invalid! %s, %d\n",
+                    move_dst,
+                    n
+                    );
+                return false;
+        }
+    }
+
+    if (dst_pile == NULL) {
+        fprintf(stderr, "Invalid destionation  input: %s\n", move_dst);
+        return false;
+    }
+
+    printf("Moved from %s to %s\n", move_src, move_dst);
+
+    struct pile *flip_pile = src_card->pile;
+    bool ret = move_card_to_pile(src_card, dst_pile);
+    if (ret)
+        _history_push(field, src_card, flip_pile, dst_pile);
+    pile_top_flip_up(flip_pile);
+    return ret;
+}
+
